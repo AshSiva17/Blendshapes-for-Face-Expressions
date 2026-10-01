@@ -83,6 +83,31 @@ const char *fragmentShaderSource = "#version 410 core\n"
                                    "   FragColor = vec4(vertexColor, 1.0);\n"
                                    "}\n\0";
 
+float get_sun_rotate_angle_around_itself(float day)
+{
+    return (360.0f / 27.0f) * day;
+}
+
+float get_earth_rotate_angle_around_sun(float day)
+{
+    return (360.0f / 365.0f) * day;
+}
+
+float get_earth_rotate_angle_around_itself(float day)
+{
+    return (360.0f / 1.0f) * day;
+}
+
+float get_moon_rotate_angle_around_earth(float day)
+{
+    return (360.0f / 28.0f) * day;
+}
+
+float get_moon_rotate_angle_around_itself(float day)
+{
+    return (360.0f / 28.0f) * day;
+}
+
 int main()
 {
     glfwInit();
@@ -221,8 +246,8 @@ int main()
     glm::mat4 model = glm::mat4(1.0f);
 
     glm::mat4 view = glm::lookAt(
-        glm::vec3(-70.0f, 80.0f, 90.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(100.0f, 50.0f, 100.0f),
+        glm::vec3(24.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 1.0f, 0.0f));
 
     glm::mat4 projection = glm::perspective(
@@ -237,10 +262,12 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
 
+    float day = 0, inc = 1.0f / 24.0f; 
+
     while (!glfwWindowShouldClose(window))
     {
         processInput(window);
-
+        day += inc;
         glClearColor(0.3f, 0.4f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -258,7 +285,12 @@ int main()
 
         // ----- SUN -----
 
-        glm::mat4 sunModel = glm::mat4(1.0f);
+        glm::mat4 sunModel(1.0f);
+
+        sunModel = glm::rotate(
+            sunModel,
+            glm::radians(get_sun_rotate_angle_around_itself(day)),
+            glm::vec3(0.0f, 1.0f, 0.0f));
 
         sunModel = glm::scale(
             sunModel,
@@ -270,18 +302,32 @@ int main()
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
+        // ----- EARTH ORBIT -----
+
+        glm::mat4 earthOrbit(1.0f);
+
+        earthOrbit = glm::rotate(
+            earthOrbit,
+            glm::radians(get_earth_rotate_angle_around_sun(day)),
+            glm::vec3(0.0f, 1.0f, 0.0f));
+
+        earthOrbit = glm::translate(
+            earthOrbit,
+            glm::vec3(24.0f, 0.0f, 0.0f));
+
         // ----- EARTH -----
 
-        glm::mat4 earthModel = glm::mat4(1.0f);
-
-        earthModel = glm::translate(
-            earthModel,
-            glm::vec3(24.0f, 0.0f, 0.0f));
+        glm::mat4 earthModel = earthOrbit;
 
         earthModel = glm::rotate(
             earthModel,
             glm::radians(-23.4f),
             glm::vec3(0.0f, 0.0f, 1.0f));
+
+        earthModel = glm::rotate(
+            earthModel,
+            glm::radians(get_earth_rotate_angle_around_itself(day)),
+            glm::vec3(0.0f, 1.0f, 0.0f));
 
         earthModel = glm::scale(
             earthModel,
@@ -295,11 +341,21 @@ int main()
 
         // ----- MOON -----
 
-        glm::mat4 moonModel = glm::mat4(1.0f);
+        glm::mat4 moonModel = earthOrbit;
+
+        moonModel = glm::rotate(
+            moonModel,
+            glm::radians(get_moon_rotate_angle_around_earth(day)),
+            glm::vec3(0.0f, 1.0f, 0.0f));
 
         moonModel = glm::translate(
             moonModel,
-            glm::vec3(36.0f, 0.0f, 0.0f));
+            glm::vec3(12.0f, 0.0f, 0.0f));
+
+        moonModel = glm::rotate(
+            moonModel,
+            glm::radians(get_moon_rotate_angle_around_itself(day)),
+            glm::vec3(0.0f, 1.0f, 0.0f));
 
         moonModel = glm::scale(
             moonModel,
