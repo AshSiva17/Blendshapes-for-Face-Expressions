@@ -221,7 +221,7 @@ int main()
     glm::mat4 model = glm::mat4(1.0f);
 
     glm::mat4 view = glm::lookAt(
-        glm::vec3(-4.0f, 5.0f, 6.0f),
+        glm::vec3(-70.0f, 80.0f, 90.0f),
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -241,32 +241,73 @@ int main()
     {
         processInput(window);
 
-        // background color
         glClearColor(0.3f, 0.4f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // draw things
         glUseProgram(shaderProgram);
 
         glUniformMatrix4fv(
-            modelLoc,
-            1,
-            GL_FALSE,
-            glm::value_ptr(model));
-
-        glUniformMatrix4fv(
-            viewLoc,
-            1,
-            GL_FALSE,
+            viewLoc, 1, GL_FALSE,
             glm::value_ptr(view));
 
         glUniformMatrix4fv(
-            projectionLoc,
-            1,
-            GL_FALSE,
+            projectionLoc, 1, GL_FALSE,
             glm::value_ptr(projection));
 
         glBindVertexArray(VAO);
+
+        // ----- SUN -----
+
+        glm::mat4 sunModel = glm::mat4(1.0f);
+
+        sunModel = glm::scale(
+            sunModel,
+            glm::vec3(6.0f));
+
+        glUniformMatrix4fv(
+            modelLoc, 1, GL_FALSE,
+            glm::value_ptr(sunModel));
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // ----- EARTH -----
+
+        glm::mat4 earthModel = glm::mat4(1.0f);
+
+        earthModel = glm::translate(
+            earthModel,
+            glm::vec3(24.0f, 0.0f, 0.0f));
+
+        earthModel = glm::rotate(
+            earthModel,
+            glm::radians(-23.4f),
+            glm::vec3(0.0f, 0.0f, 1.0f));
+
+        earthModel = glm::scale(
+            earthModel,
+            glm::vec3(3.0f));
+
+        glUniformMatrix4fv(
+            modelLoc, 1, GL_FALSE,
+            glm::value_ptr(earthModel));
+
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // ----- MOON -----
+
+        glm::mat4 moonModel = glm::mat4(1.0f);
+
+        moonModel = glm::translate(
+            moonModel,
+            glm::vec3(36.0f, 0.0f, 0.0f));
+
+        moonModel = glm::scale(
+            moonModel,
+            glm::vec3(1.5f));
+
+        glUniformMatrix4fv(
+            modelLoc, 1, GL_FALSE,
+            glm::value_ptr(moonModel));
 
         glDrawArrays(GL_TRIANGLES, 0, 36);
 
