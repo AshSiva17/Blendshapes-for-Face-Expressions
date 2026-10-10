@@ -175,60 +175,53 @@ int main()
     // Cube vertex array
     // Each vertex: x, y, z, r, g, b
     float cube_verts[] = {
-
-        // FRONT: z = 1, fuchsia (1, 0, 1)
+        // FRONT: z = 1, fuchsia
         -1, 1, 1, 1, 0, 1,
         -1, -1, 1, 1, 0, 1,
         1, 1, 1, 1, 0, 1,
-
         1, 1, 1, 1, 0, 1,
         -1, -1, 1, 1, 0, 1,
         1, -1, 1, 1, 0, 1,
 
-        // BACK: z = -1, yellow (1, 1, 0)
+        // BACK: z = -1, yellow
         -1, 1, -1, 1, 1, 0,
-        -1, -1, -1, 1, 1, 0,
-        1, 1, -1, 1, 1, 0,
-
         1, 1, -1, 1, 1, 0,
         -1, -1, -1, 1, 1, 0,
+        1, 1, -1, 1, 1, 0,
         1, -1, -1, 1, 1, 0,
+        -1, -1, -1, 1, 1, 0,
 
-        // LEFT: x = -1, red (1, 0, 0)
+        // LEFT: x = -1, red
         -1, 1, 1, 1, 0, 0,
-        -1, -1, 1, 1, 0, 0,
-        -1, 1, -1, 1, 0, 0,
-
         -1, 1, -1, 1, 0, 0,
         -1, -1, 1, 1, 0, 0,
+        -1, 1, -1, 1, 0, 0,
         -1, -1, -1, 1, 0, 0,
+        -1, -1, 1, 1, 0, 0,
 
-        // RIGHT: x = 1, green (0, 1, 0)
+        // RIGHT: x = 1, green
         1, 1, 1, 0, 1, 0,
         1, -1, 1, 0, 1, 0,
         1, 1, -1, 0, 1, 0,
-
         1, 1, -1, 0, 1, 0,
         1, -1, 1, 0, 1, 0,
         1, -1, -1, 0, 1, 0,
 
-        // TOP: y = 1, blue (0, 0, 1)
+        // TOP: y = 1, blue
         -1, 1, -1, 0, 0, 1,
         -1, 1, 1, 0, 0, 1,
         1, 1, -1, 0, 0, 1,
-
         1, 1, -1, 0, 0, 1,
         -1, 1, 1, 0, 0, 1,
         1, 1, 1, 0, 0, 1,
 
-        // BOTTOM: y = -1, aqua (0, 1, 1)
+        // BOTTOM: y = -1, aqua
         -1, -1, 1, 0, 1, 1,
         -1, -1, -1, 0, 1, 1,
         1, -1, 1, 0, 1, 1,
-
         1, -1, 1, 0, 1, 1,
         -1, -1, -1, 0, 1, 1,
-        1, -1, -1, 0, 1, 1};
+        1, -1, -1, 0, 1, 1,};
 
     unsigned int VBO, VAO;
     glGenVertexArrays(1, &VAO);
@@ -243,13 +236,6 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    glm::mat4 model = glm::mat4(1.0f);
-
-    glm::mat4 view = glm::lookAt(
-        glm::vec3(100.0f, 50.0f, 100.0f),
-        glm::vec3(24.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 1.0f, 0.0f));
-
     glm::mat4 projection = glm::perspective(
         glm::radians(30.0f),
         4.0f / 3.0f,
@@ -261,8 +247,15 @@ int main()
     int projectionLoc = glGetUniformLocation(shaderProgram, "projection");
 
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
 
-    float day = 0, inc = 1.0f / 24.0f; 
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+
+    float day = 0, inc = 1.0f / 24.0f;
+    // 0 = Sun, 1 = Earth, 2 = Moon
+    int cameraTarget = 1;
 
     while (!glfwWindowShouldClose(window))
     {
@@ -272,10 +265,6 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(shaderProgram);
-
-        glUniformMatrix4fv(
-            viewLoc, 1, GL_FALSE,
-            glm::value_ptr(view));
 
         glUniformMatrix4fv(
             projectionLoc, 1, GL_FALSE,
@@ -296,12 +285,6 @@ int main()
             sunModel,
             glm::vec3(6.0f));
 
-        glUniformMatrix4fv(
-            modelLoc, 1, GL_FALSE,
-            glm::value_ptr(sunModel));
-
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-
         // ----- EARTH ORBIT -----
 
         glm::mat4 earthOrbit(1.0f);
@@ -315,6 +298,8 @@ int main()
             earthOrbit,
             glm::vec3(24.0f, 0.0f, 0.0f));
 
+        glm::vec3 earthPosition = glm::vec3(
+            earthOrbit * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
         // ----- EARTH -----
 
         glm::mat4 earthModel = earthOrbit;
@@ -333,12 +318,6 @@ int main()
             earthModel,
             glm::vec3(3.0f));
 
-        glUniformMatrix4fv(
-            modelLoc, 1, GL_FALSE,
-            glm::value_ptr(earthModel));
-
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-
         // ----- MOON -----
 
         glm::mat4 moonModel = earthOrbit;
@@ -352,10 +331,40 @@ int main()
             moonModel,
             glm::vec3(12.0f, 0.0f, 0.0f));
 
-        moonModel = glm::rotate(
-            moonModel,
-            glm::radians(get_moon_rotate_angle_around_itself(day)),
+        glm::vec3 moonPosition = glm::vec3(
+            moonModel * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+
+        // ----- CAMERA -----
+
+        glm::vec3 target(0.0f, 0.0f, 0.0f);
+
+        if (cameraTarget == 1)
+        {
+            target = earthPosition;
+        }
+        else if (cameraTarget == 2)
+        {
+            target = moonPosition;
+        }
+
+        glm::mat4 view = glm::lookAt(
+            glm::vec3(100.0f, 50.0f, 100.0f),
+            target,
             glm::vec3(0.0f, 1.0f, 0.0f));
+
+        glUniformMatrix4fv(
+            viewLoc, 1, GL_FALSE,
+            glm::value_ptr(view));
+
+        // Draw Sun
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(sunModel));
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // Draw Earth
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(earthModel));
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        // Draw Moon
 
         moonModel = glm::scale(
             moonModel,
