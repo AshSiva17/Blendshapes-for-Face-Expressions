@@ -1,9 +1,13 @@
+#define TINYOBJLOADER_DISABLE_FAST_FLOAT
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -48,7 +52,7 @@ void processInput(GLFWwindow *window)
         std::cout << "Capture Window " << ss_id << std::endl;
         int buffer_width, buffer_height;
         glfwGetFramebufferSize(window, &buffer_width, &buffer_height);
-        dump_framebuffer_to_ppm("Assignment01-ss", buffer_width, buffer_height);
+        dump_framebuffer_to_ppm("Assignment02-ss", buffer_width, buffer_height);
     }
 }
 
@@ -83,33 +87,35 @@ const char *fragmentShaderSource = "#version 410 core\n"
                                    "   FragColor = vec4(vertexColor, 1.0);\n"
                                    "}\n\0";
 
-float get_sun_rotate_angle_around_itself(float day)
-{
-    return (360.0f / 27.0f) * day;
-}
-
-float get_earth_rotate_angle_around_sun(float day)
-{
-    return (360.0f / 365.0f) * day;
-}
-
-float get_earth_rotate_angle_around_itself(float day)
-{
-    return (360.0f / 1.0f) * day;
-}
-
-float get_moon_rotate_angle_around_earth(float day)
-{
-    return (360.0f / 28.0f) * day;
-}
-
-float get_moon_rotate_angle_around_itself(float day)
-{
-    return (360.0f / 28.0f) * day;
-}
-
 int main()
 {
+    const char *objPath = "cube.obj";
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warning;
+    std::string error;
+    const bool triangulate = true;
+    const bool loaded = tinyobj::LoadObj(
+        &attrib, &shapes, &materials, &warning, &error, objPath, nullptr, triangulate);
+    if (!warning.empty())
+    {
+        std::cerr << warning << '\n';
+    }
+    if (!loaded)
+    {
+        std::cerr << "Could not load " << objPath << ": " << error << '\n';
+        return 1;
+    }
+
+    std::size_t triangleCount = 0;
+    for (const auto &shape : shapes)
+    {
+        triangleCount += shape.mesh.num_face_vertices.size();
+    }
+    std::cout << "Loaded " << objPath << ": " << attrib.vertices.size() / 3
+              << " positions, " << triangleCount << " triangles" << std::endl;
+
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
@@ -121,7 +127,7 @@ int main()
 
     int windowWidth = 1024;
     int windowHeight = 768;
-    GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, "Assignment01", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, "Assignment02", NULL, NULL);
 
     if (window == NULL)
     {
@@ -172,70 +178,6 @@ int main()
     glDeleteShader(vs);
     glDeleteShader(fs);
 
-    // Cube vertex array
-    // Each vertex: x, y, z, r, g, b
-    float cube_verts[] = {
-        // FRONT: z = 1, fuchsia
-        -1, 1, 1, 1, 0, 1,
-        -1, -1, 1, 1, 0, 1,
-        1, 1, 1, 1, 0, 1,
-        1, 1, 1, 1, 0, 1,
-        -1, -1, 1, 1, 0, 1,
-        1, -1, 1, 1, 0, 1,
-
-        // BACK: z = -1, yellow
-        -1, 1, -1, 1, 1, 0,
-        1, 1, -1, 1, 1, 0,
-        -1, -1, -1, 1, 1, 0,
-        1, 1, -1, 1, 1, 0,
-        1, -1, -1, 1, 1, 0,
-        -1, -1, -1, 1, 1, 0,
-
-        // LEFT: x = -1, red
-        -1, 1, 1, 1, 0, 0,
-        -1, 1, -1, 1, 0, 0,
-        -1, -1, 1, 1, 0, 0,
-        -1, 1, -1, 1, 0, 0,
-        -1, -1, -1, 1, 0, 0,
-        -1, -1, 1, 1, 0, 0,
-
-        // RIGHT: x = 1, green
-        1, 1, 1, 0, 1, 0,
-        1, -1, 1, 0, 1, 0,
-        1, 1, -1, 0, 1, 0,
-        1, 1, -1, 0, 1, 0,
-        1, -1, 1, 0, 1, 0,
-        1, -1, -1, 0, 1, 0,
-
-        // TOP: y = 1, blue
-        -1, 1, -1, 0, 0, 1,
-        -1, 1, 1, 0, 0, 1,
-        1, 1, -1, 0, 0, 1,
-        1, 1, -1, 0, 0, 1,
-        -1, 1, 1, 0, 0, 1,
-        1, 1, 1, 0, 0, 1,
-
-        // BOTTOM: y = -1, aqua
-        -1, -1, 1, 0, 1, 1,
-        -1, -1, -1, 0, 1, 1,
-        1, -1, 1, 0, 1, 1,
-        1, -1, 1, 0, 1, 1,
-        -1, -1, -1, 0, 1, 1,
-        1, -1, -1, 0, 1, 1,};
-
-    unsigned int VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cube_verts), cube_verts, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-
     glm::mat4 projection = glm::perspective(
         glm::radians(30.0f),
         4.0f / 3.0f,
@@ -253,137 +195,22 @@ int main()
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
-    float day = 0, inc = 1.0f / 24.0f;
-    // 0 = Sun, 1 = Earth, 2 = Moon
-    int cameraTarget = 1;
-
     while (!glfwWindowShouldClose(window))
     {
         processInput(window);
-        day += inc;
+
         glClearColor(0.3f, 0.4f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glUseProgram(shaderProgram);
-
-        glUniformMatrix4fv(
-            projectionLoc, 1, GL_FALSE,
-            glm::value_ptr(projection));
-
-        glBindVertexArray(VAO);
-
-        // ----- SUN -----
-
-        glm::mat4 sunModel(1.0f);
-
-        sunModel = glm::rotate(
-            sunModel,
-            glm::radians(get_sun_rotate_angle_around_itself(day)),
-            glm::vec3(0.0f, 1.0f, 0.0f));
-
-        sunModel = glm::scale(
-            sunModel,
-            glm::vec3(6.0f));
-
-        // ----- EARTH ORBIT -----
-
-        glm::mat4 earthOrbit(1.0f);
-
-        earthOrbit = glm::rotate(
-            earthOrbit,
-            glm::radians(get_earth_rotate_angle_around_sun(day)),
-            glm::vec3(0.0f, 1.0f, 0.0f));
-
-        earthOrbit = glm::translate(
-            earthOrbit,
-            glm::vec3(24.0f, 0.0f, 0.0f));
-
-        glm::vec3 earthPosition = glm::vec3(
-            earthOrbit * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-        // ----- EARTH -----
-
-        glm::mat4 earthModel = earthOrbit;
-
-        earthModel = glm::rotate(
-            earthModel,
-            glm::radians(-23.4f),
-            glm::vec3(0.0f, 0.0f, 1.0f));
-
-        earthModel = glm::rotate(
-            earthModel,
-            glm::radians(get_earth_rotate_angle_around_itself(day)),
-            glm::vec3(0.0f, 1.0f, 0.0f));
-
-        earthModel = glm::scale(
-            earthModel,
-            glm::vec3(3.0f));
-
-        // ----- MOON -----
-
-        glm::mat4 moonModel = earthOrbit;
-
-        moonModel = glm::rotate(
-            moonModel,
-            glm::radians(get_moon_rotate_angle_around_earth(day)),
-            glm::vec3(0.0f, 1.0f, 0.0f));
-
-        moonModel = glm::translate(
-            moonModel,
-            glm::vec3(12.0f, 0.0f, 0.0f));
-
-        glm::vec3 moonPosition = glm::vec3(
-            moonModel * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-
-        // ----- CAMERA -----
-
-        glm::vec3 target(0.0f, 0.0f, 0.0f);
-
-        if (cameraTarget == 1)
-        {
-            target = earthPosition;
-        }
-        else if (cameraTarget == 2)
-        {
-            target = moonPosition;
-        }
-
-        glm::mat4 view = glm::lookAt(
-            glm::vec3(100.0f, 50.0f, 100.0f),
-            target,
-            glm::vec3(0.0f, 1.0f, 0.0f));
-
-        glUniformMatrix4fv(
-            viewLoc, 1, GL_FALSE,
-            glm::value_ptr(view));
-
-        // Draw Sun
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(sunModel));
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-
-        // Draw Earth
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(earthModel));
-        glDrawArrays(GL_TRIANGLES, 0, 36);
-
-        // Draw Moon
-
-        moonModel = glm::scale(
-            moonModel,
-            glm::vec3(1.5f));
-
-        glUniformMatrix4fv(
-            modelLoc, 1, GL_FALSE,
-            glm::value_ptr(moonModel));
-
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+        // Assignment 2 rendering code goes here
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // release resource
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
+    // Release resources
     glDeleteProgram(shaderProgram);
+
     glfwTerminate();
     return 0;
 }
