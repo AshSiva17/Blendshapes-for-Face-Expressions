@@ -12,15 +12,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-static unsigned int ss_id = 0;
-void dump_framebuffer_to_ppm(std::string prefix, unsigned int width, unsigned int height)
+void dump_framebuffer_to_ppm(const char *fileName, unsigned int width, unsigned int height)
 {
-    int pixelChannel = 3;
-    int totalPixelSize = pixelChannel * width * height * sizeof(GLubyte);
-    GLubyte *pixels = new GLubyte[totalPixelSize];
-    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-    std::string file_name = prefix + std::to_string(ss_id) + ".ppm";
-    std::ofstream fout(file_name);
+    constexpr unsigned int pixelChannel = 3;
+    std::vector<GLubyte> pixels(pixelChannel * width * height);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    std::ofstream fout(fileName);
     fout << "P3\n"
          << width << " " << height << "\n"
          << 255 << std::endl;
@@ -33,27 +31,11 @@ void dump_framebuffer_to_ppm(std::string prefix, unsigned int width, unsigned in
         }
         fout << std::endl;
     }
-    ss_id++;
-    delete[] pixels;
-    fout.flush();
     fout.close();
-}
-
-// key board control
-void processInput(GLFWwindow *window)
-{
-    // press escape to exit
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-
-    // press p to capture screen
-    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
-    {
-        std::cout << "Capture Window " << ss_id << std::endl;
-        int buffer_width, buffer_height;
-        glfwGetFramebufferSize(window, &buffer_width, &buffer_height);
-        dump_framebuffer_to_ppm("Assignment02-ss", buffer_width, buffer_height);
-    }
+    if (fout)
+        std::cout << "Saved " << fileName << '\n';
+    else
+        std::cerr << "Could not write " << fileName << '\n';
 }
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
@@ -62,11 +44,11 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 }
 
 // shader
-const char *vertexShaderSource = "#version 410 core\n"
+const char *vertexShaderSource = "#version 330 core\n"
                                  "layout (location = 0) in vec3 aPos;\n"
-                                 "layout (location = 1) in vec3 aColor;\n"
+                                 "layout (location = 1) in vec3 aNormal;\n"
                                  "\n"
-                                 "out vec3 vertexColor;\n"
+                                 "out vec3 Normal;\n"
                                  "\n"
                                  "uniform mat4 model;\n"
                                  "uniform mat4 view;\n"
@@ -75,46 +57,50 @@ const char *vertexShaderSource = "#version 410 core\n"
                                  "void main()\n"
                                  "{\n"
                                  "   gl_Position = projection * view * model * vec4(aPos, 1.0);\n"
-                                 "   vertexColor = aColor;\n"
+                                 "   Normal = aNormal;\n"
                                  "}\0";
 
-const char *fragmentShaderSource = "#version 410 core\n"
-                                   "in vec3 vertexColor;\n"
-                                   "out vec4 FragColor;\n"
+const char *fragmentShaderSource = "#version 330 core\n"
+                                   "in vec3 Normal;\n"
+                                   "out vec3 FragColor;\n"
                                    "\n"
                                    "void main()\n"
                                    "{\n"
-                                   "   FragColor = vec4(vertexColor, 1.0);\n"
+                                   "   float c = dot(Normal, vec3(0.8, 0.7, 0.6));\n"
+                                   "   FragColor = vec3(c, c, c);\n"
                                    "}\n\0";
 
 int main()
 {
-    const char *objPath = "cube.obj";
+    const std::string obj_path = "data/cube.obj";
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
-    std::string warning;
-    std::string error;
-    const bool triangulate = true;
-    const bool loaded = tinyobj::LoadObj(
-        &attrib, &shapes, &materials, &warning, &error, objPath, nullptr, triangulate);
-    if (!warning.empty())
+    std::string warn, err;
+    bool bTriangulate = true;
+    bool bSuc = tinyobj::LoadObj(
+        &attrib, &shapes, &materials, &warn, &err, obj_path.c_str(), nullptr, bTriangulate);
+    if (!bSuc)
     {
-        std::cerr << warning << '\n';
-    }
-    if (!loaded)
-    {
-        std::cerr << "Could not load " << objPath << ": " << error << '\n';
+        std::cout << "tinyobj error: " << err << std::endl;
         return 1;
     }
 
-    std::size_t triangleCount = 0;
-    for (const auto &shape : shapes)
+    std::vector<float> vbuffer;
+    std::vector<float> nbuffer;
+    for (auto face : shapes[0].mesh.indices)
     {
-        triangleCount += shape.mesh.num_face_vertices.size();
+        int vid = face.vertex_index;
+        int nid = face.normal_index;
+
+        vbuffer.push_back(attrib.vertices[vid * 3]);
+        vbuffer.push_back(attrib.vertices[vid * 3 + 1]);
+        vbuffer.push_back(attrib.vertices[vid * 3 + 2]);
+
+        nbuffer.push_back(attrib.normals[nid * 3]);
+        nbuffer.push_back(attrib.normals[nid * 3 + 1]);
+        nbuffer.push_back(attrib.normals[nid * 3 + 2]);
     }
-    std::cout << "Loaded " << objPath << ": " << attrib.vertices.size() / 3
-              << " positions, " << triangleCount << " triangles" << std::endl;
 
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -125,8 +111,8 @@ int main()
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    int windowWidth = 1024;
-    int windowHeight = 768;
+    int windowWidth = 512;
+    int windowHeight = 512;
     GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, "Assignment02", NULL, NULL);
 
     if (window == NULL)
@@ -143,6 +129,26 @@ int main()
         std::cout << "GLAD Initialization Failed" << std::endl;
         return -1;
     }
+
+    int framebufferWidth, framebufferHeight;
+    glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
+    glViewport(0, 0, framebufferWidth, framebufferHeight);
+
+    unsigned int VAO, positionVBO, normalVBO;
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    glGenBuffers(1, &positionVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
+    glBufferData(GL_ARRAY_BUFFER, vbuffer.size() * sizeof(float), vbuffer.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    glGenBuffers(1, &normalVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
+    glBufferData(GL_ARRAY_BUFFER, nbuffer.size() * sizeof(float), nbuffer.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(1);
 
     // shaders
     int success;
@@ -180,13 +186,16 @@ int main()
 
     glm::mat4 projection = glm::perspective(
         glm::radians(30.0f),
-        4.0f / 3.0f,
+        1.0f,
         0.1f,
         1000.0f);
 
-    int modelLoc = glGetUniformLocation(shaderProgram, "model");
-    int viewLoc = glGetUniformLocation(shaderProgram, "view");
-    int projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+    const glm::mat4 model(1.0f);
+    const glm::mat4 view = glm::lookAt(glm::vec3(-2, 3, 10), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+    glUseProgram(shaderProgram);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -195,20 +204,35 @@ int main()
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
+    bool pWasDown = false;
+    glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
     while (!glfwWindowShouldClose(window))
     {
-        processInput(window);
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+            glfwSetWindowShouldClose(window, true);
 
         glClearColor(0.3f, 0.4f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Assignment 2 rendering code goes here
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vbuffer.size() / 3));
+
+        const bool pIsDown = glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS;
+        if (pIsDown && !pWasDown)
+        {
+            glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
+            dump_framebuffer_to_ppm("cube.ppm", framebufferWidth, framebufferHeight);
+        }
+        pWasDown = pIsDown;
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     // Release resources
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &positionVBO);
+    glDeleteBuffers(1, &normalVBO);
     glDeleteProgram(shaderProgram);
 
     glfwTerminate();
