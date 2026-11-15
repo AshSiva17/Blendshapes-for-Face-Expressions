@@ -70,36 +70,39 @@ const char *fragmentShaderSource = "#version 330 core\n"
                                    "   FragColor = vec3(c, c, c);\n"
                                    "}\n\0";
 
-int main()
+struct FaceMesh
 {
-    const std::string obj_path = "data/cube.obj";
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
+};
+
+bool loadFaceMesh(const std::string &obj_path, FaceMesh &mesh)
+{
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
     bool bTriangulate = true;
     bool bSuc = tinyobj::LoadObj(
-        &attrib, &shapes, &materials, &warn, &err, obj_path.c_str(), nullptr, bTriangulate);
+        &mesh.attrib, &mesh.shapes, &materials, &warn, &err,
+        obj_path.c_str(), nullptr, bTriangulate);
     if (!bSuc)
     {
-        std::cout << "tinyobj error: " << err << std::endl;
-        return 1;
+        std::cout << "tinyobj error loading " << obj_path << ": " << err << std::endl;
+        return false;
     }
+    return true;
+}
 
-    std::vector<float> vbuffer;
-    std::vector<float> nbuffer;
-    for (auto face : shapes[0].mesh.indices)
+int main()
+{
+    FaceMesh base;
+    if (!loadFaceMesh("data/faces/base.obj", base))
+        return 1;
+
+    std::vector<FaceMesh> targets(35);
+    for (std::size_t i = 0; i < targets.size(); ++i)
     {
-        int vid = face.vertex_index;
-        int nid = face.normal_index;
-
-        vbuffer.push_back(attrib.vertices[vid * 3]);
-        vbuffer.push_back(attrib.vertices[vid * 3 + 1]);
-        vbuffer.push_back(attrib.vertices[vid * 3 + 2]);
-
-        nbuffer.push_back(attrib.normals[nid * 3]);
-        nbuffer.push_back(attrib.normals[nid * 3 + 1]);
-        nbuffer.push_back(attrib.normals[nid * 3 + 2]);
+        if (!loadFaceMesh("data/faces/" + std::to_string(i) + ".obj", targets[i]))
+            return 1;
     }
 
     glfwInit();
@@ -133,22 +136,6 @@ int main()
     int framebufferWidth, framebufferHeight;
     glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
     glViewport(0, 0, framebufferWidth, framebufferHeight);
-
-    unsigned int VAO, positionVBO, normalVBO;
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
-    glGenBuffers(1, &positionVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
-    glBufferData(GL_ARRAY_BUFFER, vbuffer.size() * sizeof(float), vbuffer.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
-    glEnableVertexAttribArray(0);
-
-    glGenBuffers(1, &normalVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
-    glBufferData(GL_ARRAY_BUFFER, nbuffer.size() * sizeof(float), nbuffer.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
-    glEnableVertexAttribArray(1);
 
     // shaders
     int success;
@@ -191,7 +178,7 @@ int main()
         1000.0f);
 
     const glm::mat4 model(1.0f);
-    const glm::mat4 view = glm::lookAt(glm::vec3(-2, 3, 10), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+    const glm::mat4 view = glm::lookAt(glm::vec3(20, 100, 200), glm::vec3(0, 110, 0), glm::vec3(0, 1, 0));
     glUseProgram(shaderProgram);
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
@@ -204,8 +191,6 @@ int main()
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
-    bool pWasDown = false;
-    glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
     while (!glfwWindowShouldClose(window))
     {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -214,25 +199,11 @@ int main()
         glClearColor(0.3f, 0.4f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vbuffer.size() / 3));
-
-        const bool pIsDown = glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS;
-        if (pIsDown && !pWasDown)
-        {
-            glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
-            dump_framebuffer_to_ppm("cube.ppm", framebufferWidth, framebufferHeight);
-        }
-        pWasDown = pIsDown;
-
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     // Release resources
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &positionVBO);
-    glDeleteBuffers(1, &normalVBO);
     glDeleteProgram(shaderProgram);
 
     glfwTerminate();
