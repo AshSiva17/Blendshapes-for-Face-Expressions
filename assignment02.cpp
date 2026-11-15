@@ -5,6 +5,7 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <cassert>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -92,6 +93,28 @@ bool loadFaceMesh(const std::string &obj_path, FaceMesh &mesh)
     return true;
 }
 
+std::vector<float> blendPositions(const FaceMesh &base,
+                                  const std::vector<FaceMesh> &targets,
+                                  const std::vector<float> &weights)
+{
+    assert(weights.size() == targets.size());
+    const auto &basePositions = base.attrib.vertices;
+    std::vector<float> newShape = basePositions;
+
+    for (std::size_t i = 0; i < targets.size(); ++i)
+    {
+        const auto &targetPositions = targets[i].attrib.vertices;
+        assert(targetPositions.size() == basePositions.size());
+
+        for (std::size_t j = 0; j < basePositions.size(); ++j)
+        {
+            newShape[j] += weights[i] * (targetPositions[j] - basePositions[j]);
+        }
+    }
+
+    return newShape;
+}
+
 int main()
 {
     FaceMesh base;
@@ -103,6 +126,45 @@ int main()
     {
         if (!loadFaceMesh("data/faces/" + std::to_string(i) + ".obj", targets[i]))
             return 1;
+    }
+
+    const int expression = 1;
+    const std::string number = std::to_string(expression);
+
+    std::ifstream weightFile("data/weights/" + number + ".weights");
+    const std::string ppmName = "blended" + number + ".ppm";
+
+    if (!weightFile)
+    {
+        std::cerr << "Could not open " << number << ".weights\n";
+        return 1;
+    }
+    std::vector<float> weights(targets.size());
+    for (std::size_t i = 0; i < weights.size(); ++i)
+    {
+        if (!(weightFile >> weights[i]))
+        {
+            std::cerr << "Could not read weight " << i << " from " << number << ".weights\n";
+            return 1;
+        }
+    }
+
+    const std::vector<float> newShape = blendPositions(base, targets, weights);
+
+    std::vector<float> vbuffer;
+    std::vector<float> nbuffer;
+    for (auto face : base.shapes[0].mesh.indices)
+    {
+        int vid = face.vertex_index;
+        int nid = face.normal_index;
+
+        vbuffer.push_back(newShape[vid * 3]);
+        vbuffer.push_back(newShape[vid * 3 + 1]);
+        vbuffer.push_back(newShape[vid * 3 + 2]);
+
+        nbuffer.push_back(base.attrib.normals[nid * 3]);
+        nbuffer.push_back(base.attrib.normals[nid * 3 + 1]);
+        nbuffer.push_back(base.attrib.normals[nid * 3 + 2]);
     }
 
     glfwInit();
@@ -136,6 +198,22 @@ int main()
     int framebufferWidth, framebufferHeight;
     glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
     glViewport(0, 0, framebufferWidth, framebufferHeight);
+
+    unsigned int VAO, positionVBO, normalVBO;
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    glGenBuffers(1, &positionVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, positionVBO);
+    glBufferData(GL_ARRAY_BUFFER, vbuffer.size() * sizeof(float), vbuffer.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+
+    glGenBuffers(1, &normalVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
+    glBufferData(GL_ARRAY_BUFFER, nbuffer.size() * sizeof(float), nbuffer.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(1);
 
     // shaders
     int success;
@@ -191,6 +269,7 @@ int main()
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
+    bool pWasDown = false;
     while (!glfwWindowShouldClose(window))
     {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -199,11 +278,25 @@ int main()
         glClearColor(0.3f, 0.4f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vbuffer.size() / 3));
+
+        const bool pIsDown = glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS;
+        if (pIsDown && !pWasDown)
+        {
+            glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
+            dump_framebuffer_to_ppm(ppmName.c_str(), framebufferWidth, framebufferHeight);
+        }
+        pWasDown = pIsDown;
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     // Release resources
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &positionVBO);
+    glDeleteBuffers(1, &normalVBO);
     glDeleteProgram(shaderProgram);
 
     glfwTerminate();
