@@ -128,7 +128,7 @@ int main()
             return 1;
     }
 
-    const int expression = 1;
+    const int expression = 11;
     const std::string number = std::to_string(expression);
 
     std::ifstream weightFile("data/weights/" + number + ".weights");
@@ -149,7 +149,7 @@ int main()
         }
     }
 
-    const std::vector<float> newShape = blendPositions(base, targets, weights);
+    std::vector<float> newShape = blendPositions(base, targets, weights);
 
     std::vector<float> vbuffer;
     std::vector<float> nbuffer;
